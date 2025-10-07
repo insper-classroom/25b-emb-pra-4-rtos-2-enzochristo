@@ -17,7 +17,7 @@ ssd1306_t disp;
 
 QueueHandle_t xQueueBtn, xQueueTime, XQueueDistance;
 SemaphoreHandle_t xSemaphoreTrigger;
-int final,start;
+int const delay = 250;
 
 // == funcoes de inicializacao ===
 // void btn_callback(uint gpio, uint32_t events) {
@@ -25,23 +25,28 @@ int final,start;
 // }
 
 void pin_callback(uint gpio, uint32_t events) {
+    int static final,start;
+
 
     // printf("evento: 0x%x\n", events);  
-    if (events ==  GPIO_IRQ_EDGE_FALL) {         // fall edge
-        final = to_us_since_boot(get_absolute_time());
-        // printf("time fall : %d\n", final);
-        // printf("FALL\n");  
-        xQueueSendFromISR(xQueueTime, &final, 0);
-
-        // printf("subtracao fall - rise: %lf: \n",(double)((final - start)*V_SOM));
-        
-    } else if(events == 0x8) {  // rise edge
+    if(events == 0x8) {  // rise edge
         start = to_us_since_boot(get_absolute_time()); 
-        xQueueSendFromISR(xQueueTime, &start, 0);
 
         // printf("time rise : %d\n", start);
 
         // printf("RISE\n");      
+    } else if (events ==  GPIO_IRQ_EDGE_FALL) {         // fall edge
+        final = to_us_since_boot(get_absolute_time());
+
+        int dt = final - start;
+        xQueueSendFromISR(xQueueTime, &dt, 0);
+
+
+        // printf("time fall : %d\n", final);
+        // printf("FALL\n");  
+
+        // printf("subtracao fall - rise: %lf: \n",(double)((final - start)*V_SOM));
+        
     }
 }
 
@@ -51,30 +56,22 @@ void echo_task(void *p){
     
 
 
-    int d = 0;
-    int time;
+    int dt = 0;
+    double distancia;
     // int recebeu = 0;
     
     while(1){
        
-        if (xQueueReceive(xQueueTime, &time,  pdMS_TO_TICKS(10))) {
-            d = time;
+        if (xQueueReceive(xQueueTime, &dt,  pdMS_TO_TICKS(delay))) {
+            printf("dt : %d\n", dt);
+            distancia = dt*V_SOM; 
+            printf("distancia : %lf cm \n", distancia);
             // printf("tempo 1 : %d\n", time);
             // printf("tempo em d : %d\n", d);
             // printf("time: %ld\n", time);
-            if (xQueueReceive(xQueueTime, &time,  pdMS_TO_TICKS(10))){
-                // printf("time2: %d\n", time);
-            }
-                d = time - d ;
-                printf("diferenca de tempos : %d\n", d);
-            //     // d = (double) d*V_SOM;
-            //     // printf("distancia: %lf", d);
-            // }
-            // else{
-            //     printf("erro na segunda medicao!");
-            // }
-        }else{
-            printf("erro na primeira medicao!");
+        }
+        else{
+            printf("erro na medicao!");
         }
         
     }
@@ -89,9 +86,10 @@ void trigger_task(void *p ){
 
     while(1){
         gpio_put(TRIG_PIN, 1);
-        vTaskDelay(pdMS_TO_TICKS(1));
+        // vTaskDelay(pdMS_TO_TICKS(0.0001));
+        sleep_us(10);
         gpio_put(TRIG_PIN, 0);
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(delay));
         
         if (xSemaphoreGive(xSemaphoreTrigger) == pdTRUE) {
             // printf("Semaforo dado com sucesso!\n");
