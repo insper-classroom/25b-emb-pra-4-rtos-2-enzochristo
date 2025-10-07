@@ -40,12 +40,6 @@ void pin_callback(uint gpio, uint32_t events) {
 
         int dt = final - start;
         xQueueSendFromISR(xQueueTime, &dt, 0);
-
-
-        // printf("time fall : %d\n", final);
-        // printf("FALL\n");  
-
-        // printf("subtracao fall - rise: %lf: \n",(double)((final - start)*V_SOM));
         
     }
 }
@@ -57,24 +51,31 @@ void echo_task(void *p){
 
 
     int dt = 0;
-    double distancia;
-    // int recebeu = 0;
-    
+    double distancia;    
     while(1){
        
         if (xQueueReceive(xQueueTime, &dt,  pdMS_TO_TICKS(delay))) {
+
             printf("dt : %d\n", dt);
             distancia = dt*V_SOM; 
+
             printf("distancia : %lf cm \n", distancia);
-            // printf("tempo 1 : %d\n", time);
-            // printf("tempo em d : %d\n", d);
-            // printf("time: %ld\n", time);
+
+            if (xQueueSend(XQueueDistance, &distancia, 10)){
+                printf("enviou o elemento!");
+            }else{
+                printf("fila esta cheia.");
+            }
         }
         else{
             printf("erro na medicao!");
         }
         
     }
+}
+
+void oled_task(void *p){
+    
 }
 
 
@@ -108,12 +109,14 @@ int main() {
 
     // xQueueBtn = xQueueCreate(64, sizeof(uint));
     xQueueTime = xQueueCreate(64, sizeof(uint));
-    // XQueueDistance = xQueueCreate(64, sizeof(double));
+    XQueueDistance = xQueueCreate(64, sizeof(double));
     xSemaphoreTrigger = xSemaphoreCreateBinary();
 
     // xTaskCreate(task_1, "Task 1", 8192, NULL, 1, NULL);
     xTaskCreate(trigger_task, "Task 2", 256, NULL, 1, NULL);
     xTaskCreate(echo_task, "Task 3", 256, NULL, 1, NULL);
+    xTaskCreate(oled_task, "Task 4", 256, NULL, 1, NULL);
+
 
 
 
@@ -121,25 +124,3 @@ int main() {
 
     while (true);
 }
-
-
-/*
-     if (xQueueReceive(xQueueTime, &time,  pdMS_TO_TICKS(100))){
-                printf("time2: %lld\n", time);
-                time = time - time2;
-                printf("diferenca de tempos : %lld\n", time);
-                d = time*V_SOM;
-                // d = d*V_SOM;
-                printf("distancia: %lld", d);
-            }
-            else{
-                printf("Falha na medicao do segundo dado!");
-            }
-        }
-        else{
-            printf("Falha na medicao do primeiro dado!");
-
-        }
-     
-
-*/
