@@ -7,6 +7,9 @@ const int BTN_PIN_B = 6;
 const int LED_PIN_R = 7;
 const int LED_PIN_G = 8;
 const int LED_PIN_B = 9;
+const int TRIG_PIN = 16;
+const int ECHO_PIN = 17;
+
 
 
 #endif // PINS_H

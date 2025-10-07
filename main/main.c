@@ -10,115 +10,138 @@
 #include "pico/stdlib.h"
 #include "pins.h"
 #include "ssd1306.h"
+#define V_SOM 0.017015 
 
 // === Definições para SSD1306 ===
 ssd1306_t disp;
 
-QueueHandle_t xQueueBtn;
+QueueHandle_t xQueueBtn, xQueueTime, XQueueDistance;
+SemaphoreHandle_t xSemaphoreTrigger;
+int final,start;
 
 // == funcoes de inicializacao ===
-void btn_callback(uint gpio, uint32_t events) {
-    if (events & GPIO_IRQ_EDGE_FALL) xQueueSendFromISR(xQueueBtn, &gpio, 0);
-}
+// void btn_callback(uint gpio, uint32_t events) {
+//     if (events & GPIO_IRQ_EDGE_FALL) xQueueSendFromISR(xQueueBtn, &gpio, 0);
+// }
 
-void oled_display_init(void) {
-    i2c_init(i2c1, 400000);
-    gpio_set_function(2, GPIO_FUNC_I2C);
-    gpio_set_function(3, GPIO_FUNC_I2C);
-    gpio_pull_up(2);
-    gpio_pull_up(3);
+void pin_callback(uint gpio, uint32_t events) {
 
-    disp.external_vcc = false;
-    ssd1306_init(&disp, 128, 64, 0x3C, i2c1);
-    ssd1306_clear(&disp);
-    ssd1306_show(&disp);
-}
+    // printf("evento: 0x%x\n", events);  
+    if (events ==  GPIO_IRQ_EDGE_FALL) {         // fall edge
+        final = to_us_since_boot(get_absolute_time());
+        // printf("time fall : %d\n", final);
+        // printf("FALL\n");  
+        xQueueSendFromISR(xQueueTime, &final, 0);
 
-void btns_init(void) {
-    gpio_init(BTN_PIN_R);
-    gpio_set_dir(BTN_PIN_R, GPIO_IN);
-    gpio_pull_up(BTN_PIN_R);
+        // printf("subtracao fall - rise: %lf: \n",(double)((final - start)*V_SOM));
+        
+    } else if(events == 0x8) {  // rise edge
+        start = to_us_since_boot(get_absolute_time()); 
+        xQueueSendFromISR(xQueueTime, &start, 0);
 
-    gpio_init(BTN_PIN_G);
-    gpio_set_dir(BTN_PIN_G, GPIO_IN);
-    gpio_pull_up(BTN_PIN_G);
+        // printf("time rise : %d\n", start);
 
-    gpio_init(BTN_PIN_B);
-    gpio_set_dir(BTN_PIN_B, GPIO_IN);
-    gpio_pull_up(BTN_PIN_B);
-
-    gpio_set_irq_enabled_with_callback(BTN_PIN_R,
-                                       GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
-                                       true, &btn_callback);
-    gpio_set_irq_enabled(BTN_PIN_G, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
-                         true);
-    gpio_set_irq_enabled(BTN_PIN_B, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
-                         true);
-}
-
-void led_rgb_init(void) {
-    gpio_init(LED_PIN_R);
-    gpio_set_dir(LED_PIN_R, GPIO_OUT);
-    gpio_put(LED_PIN_R, 1);
-
-    gpio_init(LED_PIN_G);
-    gpio_set_dir(LED_PIN_G, GPIO_OUT);
-    gpio_put(LED_PIN_G, 1);
-
-    gpio_init(LED_PIN_B);
-    gpio_set_dir(LED_PIN_B, GPIO_OUT);
-    gpio_put(LED_PIN_B, 1);
-}
-
-void task_1(void *p) {
-    btns_init();
-    led_rgb_init();
-    oled_display_init();
-
-    uint btn_data;
-
-    while (1) {
-        if (xQueueReceive(xQueueBtn, &btn_data, pdMS_TO_TICKS(2000))) {
-            printf("btn: %d \n", btn_data);
-
-            switch (btn_data) {
-                case BTN_PIN_B:
-                    gpio_put(LED_PIN_B, 0);
-                    ssd1306_draw_string(&disp, 8, 0, 2, "BLUE");
-                    ssd1306_show(&disp);
-                    break;
-                case BTN_PIN_G:
-                    gpio_put(LED_PIN_G, 0);
-                    ssd1306_draw_string(&disp, 8, 24, 2, "GREEN");
-                    ssd1306_show(&disp);
-                    break;
-                case BTN_PIN_R:
-                    gpio_put(LED_PIN_R, 0);
-
-                    ssd1306_draw_string(&disp, 8, 48, 2, "RED");
-                    ssd1306_show(&disp);
-                    break;
-                default:
-                    // Handle other buttons if needed
-                    break;
-            }
-        } else {
-            ssd1306_clear(&disp);
-            ssd1306_show(&disp);
-            gpio_put(LED_PIN_R, 1);
-            gpio_put(LED_PIN_G, 1);
-            gpio_put(LED_PIN_B, 1);
-        }
+        // printf("RISE\n");      
     }
 }
 
+void echo_task(void *p){
+    gpio_init(ECHO_PIN);
+    gpio_set_dir(ECHO_PIN, GPIO_IN);
+    
+
+
+    int d = 0;
+    int time;
+    // int recebeu = 0;
+    
+    while(1){
+       
+        if (xQueueReceive(xQueueTime, &time,  pdMS_TO_TICKS(10))) {
+            d = time;
+            // printf("tempo 1 : %d\n", time);
+            // printf("tempo em d : %d\n", d);
+            // printf("time: %ld\n", time);
+            if (xQueueReceive(xQueueTime, &time,  pdMS_TO_TICKS(10))){
+                // printf("time2: %d\n", time);
+            }
+                d = time - d ;
+                printf("diferenca de tempos : %d\n", d);
+            //     // d = (double) d*V_SOM;
+            //     // printf("distancia: %lf", d);
+            // }
+            // else{
+            //     printf("erro na segunda medicao!");
+            // }
+        }else{
+            printf("erro na primeira medicao!");
+        }
+        
+    }
+}
+
+
+void trigger_task(void *p ){
+
+    gpio_init(TRIG_PIN);
+    gpio_set_dir(TRIG_PIN, GPIO_OUT);
+    gpio_put(TRIG_PIN,0);
+
+    while(1){
+        gpio_put(TRIG_PIN, 1);
+        vTaskDelay(pdMS_TO_TICKS(1));
+        gpio_put(TRIG_PIN, 0);
+        vTaskDelay(pdMS_TO_TICKS(10));
+        
+        if (xSemaphoreGive(xSemaphoreTrigger) == pdTRUE) {
+            // printf("Semaforo dado com sucesso!\n");
+            printf("\n");
+        } else {
+            // printf("Falha ao dar o semaforo!\n");
+            printf("\n");
+        }
+    }
+
+
+}
 int main() {
     stdio_init_all();
+    gpio_set_irq_enabled_with_callback(ECHO_PIN, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL , true, &pin_callback);
 
-    xQueueBtn = xQueueCreate(32, sizeof(uint));
-    xTaskCreate(task_1, "Task 1", 8192, NULL, 1, NULL);
+    // xQueueBtn = xQueueCreate(64, sizeof(uint));
+    xQueueTime = xQueueCreate(64, sizeof(uint));
+    // XQueueDistance = xQueueCreate(64, sizeof(double));
+    xSemaphoreTrigger = xSemaphoreCreateBinary();
+
+    // xTaskCreate(task_1, "Task 1", 8192, NULL, 1, NULL);
+    xTaskCreate(trigger_task, "Task 2", 256, NULL, 1, NULL);
+    xTaskCreate(echo_task, "Task 3", 256, NULL, 1, NULL);
+
+
 
     vTaskStartScheduler();
 
     while (true);
 }
+
+
+/*
+     if (xQueueReceive(xQueueTime, &time,  pdMS_TO_TICKS(100))){
+                printf("time2: %lld\n", time);
+                time = time - time2;
+                printf("diferenca de tempos : %lld\n", time);
+                d = time*V_SOM;
+                // d = d*V_SOM;
+                printf("distancia: %lld", d);
+            }
+            else{
+                printf("Falha na medicao do segundo dado!");
+            }
+        }
+        else{
+            printf("Falha na medicao do primeiro dado!");
+
+        }
+     
+
+*/
