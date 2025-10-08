@@ -21,13 +21,9 @@ SemaphoreHandle_t xSemaphoreTrigger;
 void pin_callback(uint gpio, uint32_t events) {
     int static final,start;
 
-    // printf("evento: 0x%x\n", events);  
     if(events == 0x8) {  // rise edge
         start = to_us_since_boot(get_absolute_time()); 
 
-        // printf("time rise : %d\n", start);
-
-        // printf("RISE\n");      
     } else if (events ==  GPIO_IRQ_EDGE_FALL) {         // fall edge
         final = to_us_since_boot(get_absolute_time());
 
@@ -47,15 +43,10 @@ void echo_task(void *p){
        
         if (xQueueReceive(xQueueTime, &dt,  pdMS_TO_TICKS(1000))) {
 
-            // printf("dt : %d\n", dt);
-            distancia = dt*V_SOM; 
-
-            // printf("distancia : %lf cm \n", distancia);
-
+            distancia = dt*V_SOM;
+            
             if (xQueueSend(XQueueDistance, &distancia, 10)){
-                // printf("enviou o elemento!");
             }else{
-                // printf("fila esta cheia.");
             }
         }
         else{
