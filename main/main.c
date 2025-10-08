@@ -38,13 +38,13 @@ void echo_task(void *p){
     gpio_set_dir(ECHO_PIN, GPIO_IN);
     
     int dt = 0;
-    double distancia = 0;    
+    double distancia;    
     while(1){
        
         if (xQueueReceive(xQueueTime, &dt,  pdMS_TO_TICKS(1000))) {
 
             distancia = dt*V_SOM;
-            
+
             if (xQueueSend(XQueueDistance, &distancia, 10)){
             }else{
             }
