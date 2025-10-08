@@ -12,6 +12,9 @@
 #include "ssd1306.h"
 #define V_SOM 0.017015 
 
+const int TRIG_PIN = 16;
+const int ECHO_PIN = 17;
+
 // === Definições para SSD1306 ===
 ssd1306_t disp;
 
